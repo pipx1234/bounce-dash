@@ -237,7 +237,6 @@ function update() {
       if (p.falling) { p.fallVy += 0.35; p.y += p.fallVy; p.angle += 0.03; }
     }
     camX += (ball.x - W * 0.35 - camX) * 0.12;
-    if (levelTransTick >= 150) advanceLevel();
     return;
   }
 
@@ -539,10 +538,9 @@ function drawLevelComplete() {
     ctx.fillText(`Next: ${next.name}`, W / 2, H / 2 + 46);
   }
 
-  const secsLeft = Math.max(1, Math.ceil((150 - levelTransTick) / 60));
-  ctx.fillStyle = '#555';
-  ctx.font      = '13px "Segoe UI", Arial';
-  ctx.fillText(`Auto-advancing in ${secsLeft}s  ·  Space to skip`, W / 2, H / 2 + 80);
+  ctx.fillStyle = '#aaaaaa';
+  ctx.font      = 'bold 15px "Segoe UI", Arial';
+  ctx.fillText('Press Space or Enter to continue', W / 2, H / 2 + 80);
 
   ctx.textAlign = 'left';
   ctx.restore();
