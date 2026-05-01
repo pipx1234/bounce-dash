@@ -42,7 +42,9 @@ const W = 800, H = 480;
 const GRAVITY    = 0.46;
 const MAX_FALL   = 16;
 const H_ACCEL    = 0.55;
-const MAX_H      = 6.5;
+const MAX_H      = 6.5;   // base cap — ramps to MAX_H_BOOST when holding
+const MAX_H_BOOST = 14.5; // top speed after full charge
+const BOOST_TICKS = 45;   // frames to reach full boost
 const H_FRIC     = 0.78;
 const BOUNCE     = 0.72;
 const MIN_BOUNCE = 10.0;  // guaranteed minimum upward velocity after landing
@@ -98,7 +100,7 @@ function genChunk(ci) {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 function init() {
-  ball       = { x: START_X, y: 330, vx: 0, vy: -12 };
+  ball       = { x: START_X, y: 330, vx: 0, vy: -12, holdTicks: 0, holdDir: 0 };
   camX       = 0;
   camXTarget = 0;
   tick       = 0;
@@ -148,8 +150,22 @@ function update() {
   const left  = keys['ArrowLeft']  || keys['a'];
   const right = keys['ArrowRight'] || keys['d'];
 
-  if (left)            ball.vx = Math.max(ball.vx - H_ACCEL, -MAX_H);
-  if (right)           ball.vx = Math.min(ball.vx + H_ACCEL,  MAX_H);
+  if (left || right) {
+    const dir = right ? 1 : -1;
+    // reset charge if direction changed
+    if (dir !== ball.holdDir) { ball.holdTicks = 0; ball.holdDir = dir; }
+    ball.holdTicks = Math.min(ball.holdTicks + 1, BOOST_TICKS);
+  } else {
+    ball.holdTicks = Math.max(ball.holdTicks - 3, 0); // bleed off charge when released
+    ball.holdDir   = 0;
+  }
+
+  const charge   = ball.holdTicks / BOOST_TICKS;          // 0..1
+  const dynMaxH  = lerp(MAX_H, MAX_H_BOOST, charge);
+  const dynAccel = H_ACCEL * (1 + charge * 1.2);          // accel also ramps
+
+  if (left)            ball.vx = Math.max(ball.vx - dynAccel, -dynMaxH);
+  if (right)           ball.vx = Math.min(ball.vx + dynAccel,  dynMaxH);
   if (!left && !right) ball.vx *= H_FRIC;
   if (Math.abs(ball.vx) < 0.05) ball.vx = 0;
 
@@ -283,23 +299,40 @@ function drawBall() {
   ctx.fill();
   ctx.restore();
 
-  // Glow
-  const halo = ctx.createRadialGradient(bx, by, 0, bx, by, BALL_R * 2.2);
-  halo.addColorStop(0, 'rgba(126,184,247,0.35)');
-  halo.addColorStop(1, 'rgba(126,184,247,0)');
+  const charge = ball.holdTicks / BOOST_TICKS;
+
+  // Glow — shifts from blue to orange as charge builds
+  const glowR = Math.round(lerp(126, 255, charge));
+  const glowG = Math.round(lerp(184, 140, charge));
+  const glowB = Math.round(lerp(247,  30, charge));
+  const halo = ctx.createRadialGradient(bx, by, 0, bx, by, BALL_R * (2.2 + charge * 1.4));
+  halo.addColorStop(0, `rgba(${glowR},${glowG},${glowB},${0.35 + charge * 0.4})`);
+  halo.addColorStop(1, `rgba(${glowR},${glowG},${glowB},0)`);
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(bx, by, BALL_R * 2.2, 0, Math.PI * 2);
+  ctx.arc(bx, by, BALL_R * (2.2 + charge * 1.4), 0, Math.PI * 2);
   ctx.fill();
 
-  // Ball body
+  // Ball body — tints towards orange at full charge
   const bg = ctx.createRadialGradient(bx - 3, by - 3, 1, bx, by, BALL_R);
   bg.addColorStop(0, '#e9f5ff');
-  bg.addColorStop(1, '#5aaef5');
+  bg.addColorStop(1, `rgb(${Math.round(lerp(90, 255, charge))},${Math.round(lerp(174, 110, charge))},${Math.round(lerp(245, 20, charge))}`);
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(bx, by, BALL_R, 0, Math.PI * 2);
   ctx.fill();
+
+  // Charge arc above ball
+  if (charge > 0.05) {
+    ctx.save();
+    ctx.strokeStyle = `rgba(${glowR},${glowG},${glowB},${0.5 + charge * 0.5})`;
+    ctx.lineWidth   = 2.5;
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.arc(bx, by, BALL_R + 7, Math.PI + Math.PI * (1 - charge), Math.PI * 2 - Math.PI * (1 - charge));
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawHUD() {
