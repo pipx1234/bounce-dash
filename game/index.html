@@ -186,11 +186,17 @@ function advanceLevel() {
   state            = 'playing';
   levelTransTick   = 0;
 
+  // Reset ball vertical state so it can't be below the death line
+  ball.y         = 220;
+  ball.vy        = -10;
+  ball.holdTicks = 0;
+  ball.holdDir   = 0;
+
   // Keep platforms that are still ahead; drop fallen ones
   platforms = platforms.filter(p => !p.falling && p.x + p.w > camX - 200);
 
-  // Safe landing platform just ahead
-  platforms.push({ x: ball.x + 100, y: ball.y + 80, w: 280, t: 0, level: currentLevel, lit: 0 });
+  // Safe landing platform just ahead at a fixed, reachable height
+  platforms.push({ x: ball.x + 80, y: 350, w: 280, t: 0, level: currentLevel, lit: 0 });
 
   for (let i = 0; i < 5; i++) genChunk(levelChunkOffset + i);
   nextChunk = levelChunkOffset + 5;
