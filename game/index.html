@@ -121,6 +121,7 @@ function init() {
 // ── Collision ──────────────────────────────────────────────────────────────
 function resolvePlatforms() {
   for (const p of platforms) {
+    if (p.falling) continue;
     if (ball.x + BALL_R < p.x || ball.x - BALL_R > p.x + p.w) continue;
     if (ball.vy <= 0) continue;
 
@@ -128,9 +129,12 @@ function resolvePlatforms() {
     const curBotY  =  ball.y            + BALL_R;
 
     if (prevBotY <= p.y && curBotY >= p.y) {
-      ball.y  = p.y - BALL_R;
-      ball.vy = -Math.max(Math.abs(ball.vy) * BOUNCE, MIN_BOUNCE);
-      p.lit   = 8;
+      ball.y     = p.y - BALL_R;
+      ball.vy    = -Math.max(Math.abs(ball.vy) * BOUNCE, MIN_BOUNCE);
+      p.lit      = 8;
+      p.falling  = true;
+      p.fallVy   = 1.5;
+      p.angle    = 0;
       break;
     }
   }
@@ -165,8 +169,17 @@ function update() {
 
   while (320 + nextChunk * CHUNK_W < camX + W * 2.5) genChunk(nextChunk++);
 
+  // Animate falling platforms
+  for (const p of platforms) {
+    if (p.falling) {
+      p.fallVy += 0.35;
+      p.y      += p.fallVy;
+      p.angle  += 0.03;
+    }
+  }
+
   if (platforms.length > 300)
-    platforms = platforms.filter(p => p.x + p.w > camX - 300);
+    platforms = platforms.filter(p => p.x + p.w > camX - 300 && p.y < H + 120);
 
   for (const p of platforms) if (p.lit > 0) p.lit--;
 
@@ -236,12 +249,24 @@ function drawPlatforms() {
       ctx.fillStyle = `rgb(${baseR},${baseG},${baseB})`;
     }
 
-    roundRect(sx, p.y, p.w, PLAT_H, 4);
-    ctx.fill();
-
-    // Highlight stripe
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fillRect(sx + 5, p.y + 2, p.w - 10, 3);
+    if (p.falling) {
+      const alpha = Math.max(0, 1 - p.fallVy / 16);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(sx + p.w / 2, p.y + PLAT_H / 2);
+      ctx.rotate(p.angle);
+      roundRect(-p.w / 2, -PLAT_H / 2, p.w, PLAT_H, 4);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(-p.w / 2 + 5, -PLAT_H / 2 + 2, p.w - 10, 3);
+      ctx.restore();
+    } else {
+      roundRect(sx, p.y, p.w, PLAT_H, 4);
+      ctx.fill();
+      // Highlight stripe
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(sx + 5, p.y + 2, p.w - 10, 3);
+    }
   }
 }
 
