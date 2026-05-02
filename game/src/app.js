@@ -139,6 +139,11 @@ await loadLeaderboards();
 const held = {};
 let submittedGameOverScore = null;
 let pendingScore = null;
+const ballTrail = [];
+
+function resetBallTrail() {
+  ballTrail.length = 0;
+}
 
 async function beginGame() {
   if (phase === 'starting') return;
@@ -146,6 +151,7 @@ async function beginGame() {
   setScoreForm(false);
   submittedGameOverScore = null;
   pendingScore = null;
+  resetBallTrail();
   await startRun();
   wasm.game_init(Number.isFinite(storedBest) ? storedBest : 0, currentRun.seed);
   phase = 'playing';
@@ -331,9 +337,31 @@ function drawPlatforms(fallbackLevel, platformData) {
 
 function drawBall(bx, by, holdTicks) {
   const charge = holdTicks / 45;
-  const glowR = Math.round(lerp(126, 255, charge));
-  const glowG = Math.round(lerp(184, 140, charge));
-  const glowB = Math.round(lerp(247, 30, charge));
+  const tailR = Math.round(lerp(126, 70, charge));
+  const tailG = Math.round(lerp(184, 230, charge));
+  const tailB = Math.round(lerp(247, 210, charge));
+
+  const previous = ballTrail[ballTrail.length - 1];
+  if (previous && Math.hypot(bx - previous.x, by - previous.y) > 90) resetBallTrail();
+  ballTrail.push({ x: bx, y: by, charge });
+  while (ballTrail.length > 14) ballTrail.shift();
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let index = 1; index < ballTrail.length; index += 1) {
+    const from = ballTrail[index - 1];
+    const to = ballTrail[index];
+    const age = index / (ballTrail.length - 1);
+    ctx.strokeStyle = `rgba(${tailR},${tailG},${tailB},${0.05 + age * (0.22 + charge * 0.16)})`;
+    ctx.lineWidth = 2 + age * (BALL_R * (0.8 + charge * 0.35));
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
   ctx.save();
   ctx.globalAlpha = 0.25;
   ctx.fillStyle = '#000';
@@ -341,30 +369,14 @@ function drawBall(bx, by, holdTicks) {
   ctx.ellipse(bx, by + BALL_R + 2, BALL_R * 0.85, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  const halo = ctx.createRadialGradient(bx, by, 0, bx, by, BALL_R * (2.2 + charge * 1.4));
-  halo.addColorStop(0, `rgba(${glowR},${glowG},${glowB},${0.35 + charge * 0.4})`);
-  halo.addColorStop(1, `rgba(${glowR},${glowG},${glowB},0)`);
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(bx, by, BALL_R * (2.2 + charge * 1.4), 0, Math.PI * 2);
-  ctx.fill();
+
   const gradient = ctx.createRadialGradient(bx - 3, by - 3, 1, bx, by, BALL_R);
   gradient.addColorStop(0, '#e9f5ff');
-  gradient.addColorStop(1, `rgb(${Math.round(lerp(90, 255, charge))},${Math.round(lerp(174, 110, charge))},${Math.round(lerp(245, 20, charge))})`);
+  gradient.addColorStop(1, `rgb(${Math.round(lerp(90, 70, charge))},${Math.round(lerp(174, 230, charge))},${Math.round(lerp(245, 210, charge))})`);
   ctx.fillStyle = gradient;
   ctx.beginPath();
   ctx.arc(bx, by, BALL_R, 0, Math.PI * 2);
   ctx.fill();
-  if (charge > 0.05) {
-    ctx.save();
-    ctx.strokeStyle = `rgba(${glowR},${glowG},${glowB},${0.5 + charge * 0.5})`;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(bx, by, BALL_R + 7, Math.PI + Math.PI * (1 - charge), Math.PI * 2 - Math.PI * (1 - charge));
-    ctx.stroke();
-    ctx.restore();
-  }
 }
 
 function drawHUD(score, best) {
