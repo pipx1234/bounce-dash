@@ -29,7 +29,9 @@ struct Rng {
 impl Rng {
     fn new(seed: u32) -> Self {
         let mixed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
-        Self { seed: if mixed == 0 { 1 } else { mixed } }
+        Self {
+            seed: if mixed == 0 { 1 } else { mixed },
+        }
     }
 
     fn next(&mut self) -> f64 {
@@ -44,9 +46,18 @@ fn lerp(start: f64, end: f64, amount: f64) -> f64 {
     start + (end - start) * amount.max(0.0).min(1.0)
 }
 
+fn smoothstep(edge0: f64, edge1: f64, value: f64) -> f64 {
+    let t = ((value - edge0) / (edge1 - edge0)).max(0.0).min(1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn meters_at_x(x: f64) -> f64 {
+    ((x - START_X) / 10.0).max(0.0)
+}
+
 fn difficulty_at_x(x: f64) -> f64 {
-    let meters = ((x - START_X) / 10.0).max(0.0);
-    (meters / 2200.0).min(1.0).powf(0.85)
+    let meters = meters_at_x(x);
+    (meters / 6000.0).min(1.0).powf(0.9)
 }
 
 #[derive(Clone)]
@@ -87,7 +98,14 @@ struct Game {
 impl Game {
     fn new() -> Self {
         let mut game = Self {
-            ball: Ball { x: START_X, y: 330.0, vx: 0.0, vy: -12.0, hold_ticks: 0.0, hold_dir: 0.0 },
+            ball: Ball {
+                x: START_X,
+                y: 330.0,
+                vx: 0.0,
+                vy: -12.0,
+                hold_ticks: 0.0,
+                hold_dir: 0.0,
+            },
             cam_x_target: 0.0,
             platforms: Vec::new(),
             score: 0,
@@ -103,7 +121,14 @@ impl Game {
     }
 
     fn reset_with_seed(&mut self, seed: u32) {
-        self.ball = Ball { x: START_X, y: 330.0, vx: 0.0, vy: -12.0, hold_ticks: 0.0, hold_dir: 0.0 };
+        self.ball = Ball {
+            x: START_X,
+            y: 330.0,
+            vx: 0.0,
+            vy: -12.0,
+            hold_ticks: 0.0,
+            hold_dir: 0.0,
+        };
         self.cam_x_target = 0.0;
         self.platforms.clear();
         self.score = 0;
@@ -159,21 +184,36 @@ impl Game {
     }
 
     fn gen_next_cluster(&mut self) {
+        let meters = meters_at_x(self.next_cluster_x);
         let difficulty = difficulty_at_x(self.next_cluster_x);
-        let vertical_span = lerp(54.0, 128.0, difficulty);
+        let sparse_ramp = smoothstep(2400.0, 6000.0, meters);
+        let precision_ramp = smoothstep(4200.0, 6000.0, meters);
+        let vertical_span = lerp(54.0, 118.0, difficulty) + precision_ramp * 18.0;
         let raw_delta = (self.rng.next() * 2.0 - 1.0) * vertical_span;
-        let path_y = (self.path_y + raw_delta).max(PLATFORM_Y_MIN).min(PLATFORM_Y_MAX);
+        let path_y = (self.path_y + raw_delta)
+            .max(PLATFORM_Y_MIN)
+            .min(PLATFORM_Y_MAX);
 
         let upward = (self.path_y - path_y).max(0.0);
         let downward = (path_y - self.path_y).max(0.0);
-        let min_gap = lerp(60.0, 108.0, difficulty);
-        let desired_max_gap = lerp(126.0, 212.0, difficulty);
-        let reachable_gap = lerp(76.0, 196.0, difficulty) - upward * 0.62 + downward * 0.18;
+        let min_gap = lerp(60.0, 124.0, difficulty);
+        let desired_max_gap = lerp(126.0, 272.0, difficulty);
+        let reachable_gap = lerp(76.0, 260.0, difficulty) - upward * 0.58 + downward * 0.12;
         let max_gap = desired_max_gap.min(reachable_gap).max(min_gap + 14.0);
-        let gap = lerp(min_gap, max_gap, self.rng.next());
+        let random_gap = self.rng.next();
+        let near_limit_gap = 0.84 + self.rng.next() * 0.16;
+        let gap = lerp(
+            min_gap,
+            max_gap,
+            lerp(random_gap, near_limit_gap, precision_ramp),
+        );
         let path_x = self.next_cluster_x + gap;
-        let cluster_radius = lerp(260.0, 160.0, difficulty);
-        let decoy_count = lerp(6.0, 2.0, difficulty).round() as usize;
+        let cluster_radius = lerp(260.0, 92.0, sparse_ramp);
+        let decoy_count = if precision_ramp > 0.94 {
+            0
+        } else {
+            lerp(7.0, 0.0, sparse_ramp).round() as usize
+        };
 
         self.push_platform(path_x, path_y, difficulty);
         for _ in 0..decoy_count {
@@ -184,7 +224,7 @@ impl Game {
         }
 
         self.path_y = path_y;
-        self.next_cluster_x = path_x + lerp(88.0, 172.0, difficulty);
+        self.next_cluster_x = path_x + lerp(88.0, 218.0, difficulty) + precision_ramp * 32.0;
     }
 
     fn spawn_until(&mut self, target_x: f64) {
@@ -195,9 +235,15 @@ impl Game {
 
     fn resolve_platforms(&mut self) {
         for platform in self.platforms.iter_mut() {
-            if platform.falling { continue; }
-            if self.ball.x + BALL_R < platform.x || self.ball.x - BALL_R > platform.x + platform.w { continue; }
-            if self.ball.vy <= 0.0 { continue; }
+            if platform.falling {
+                continue;
+            }
+            if self.ball.x + BALL_R < platform.x || self.ball.x - BALL_R > platform.x + platform.w {
+                continue;
+            }
+            if self.ball.vy <= 0.0 {
+                continue;
+            }
             let previous_bottom = (self.ball.y - self.ball.vy) + BALL_R;
             let current_bottom = self.ball.y + BALL_R;
             if previous_bottom <= platform.y && current_bottom >= platform.y {
@@ -223,7 +269,9 @@ impl Game {
     }
 
     fn update(&mut self, left: bool, right: bool) {
-        if self.state != 0 { return; }
+        if self.state != 0 {
+            return;
+        }
 
         self.tick += 1;
 
@@ -243,10 +291,18 @@ impl Game {
         let dynamic_max_h = lerp(MAX_H, MAX_H_BOOST, charge);
         let dynamic_accel = H_ACCEL * (1.0 + charge * 1.2);
 
-        if left { self.ball.vx = (self.ball.vx - dynamic_accel).max(-dynamic_max_h); }
-        if right { self.ball.vx = (self.ball.vx + dynamic_accel).min(dynamic_max_h); }
-        if !left && !right { self.ball.vx *= H_FRIC; }
-        if self.ball.vx.abs() < 0.05 { self.ball.vx = 0.0; }
+        if left {
+            self.ball.vx = (self.ball.vx - dynamic_accel).max(-dynamic_max_h);
+        }
+        if right {
+            self.ball.vx = (self.ball.vx + dynamic_accel).min(dynamic_max_h);
+        }
+        if !left && !right {
+            self.ball.vx *= H_FRIC;
+        }
+        if self.ball.vx.abs() < 0.05 {
+            self.ball.vx = 0.0;
+        }
 
         self.ball.vy = (self.ball.vy + GRAVITY).min(MAX_FALL);
         self.ball.x += self.ball.vx;
@@ -255,18 +311,26 @@ impl Game {
         self.resolve_platforms();
 
         let distance = (((self.ball.x - START_X) / 10.0).floor() as i64).max(0) as u32;
-        if distance > self.score { self.score = distance; }
-        if self.score > self.best { self.best = self.score; }
+        if distance > self.score {
+            self.score = distance;
+        }
+        if self.score > self.best {
+            self.best = self.score;
+        }
 
         self.cam_x_target = (self.ball.x - W * 0.35).max(0.0);
         self.spawn_until(self.cam_x_target + STREAM_AHEAD);
         self.tick_falling();
 
         let camera = self.cam_x_target;
-        self.platforms.retain(|platform| platform.x + platform.w > camera - CLEAN_BEHIND && platform.y < H_C + 140.0);
+        self.platforms.retain(|platform| {
+            platform.x + platform.w > camera - CLEAN_BEHIND && platform.y < H_C + 140.0
+        });
 
         for platform in self.platforms.iter_mut() {
-            if platform.lit > 0 { platform.lit -= 1; }
+            if platform.lit > 0 {
+                platform.lit -= 1;
+            }
         }
 
         if self.ball.y - BALL_R > H_C + 20.0 {
@@ -306,20 +370,55 @@ pub fn restart(seed: u32) {
 #[wasm_bindgen]
 pub fn advance_level() {}
 
-#[wasm_bindgen] pub fn get_ball_x() -> f64 { GAME.with(|game_cell| game_cell.borrow().ball.x) }
-#[wasm_bindgen] pub fn get_ball_y() -> f64 { GAME.with(|game_cell| game_cell.borrow().ball.y) }
-#[wasm_bindgen] pub fn get_ball_hold_ticks() -> f64 { GAME.with(|game_cell| game_cell.borrow().ball.hold_ticks) }
-#[wasm_bindgen] pub fn get_cam_x_target() -> f64 { GAME.with(|game_cell| game_cell.borrow().cam_x_target) }
-#[wasm_bindgen] pub fn get_score() -> u32 { GAME.with(|game_cell| game_cell.borrow().score) }
-#[wasm_bindgen] pub fn get_best() -> u32 { GAME.with(|game_cell| game_cell.borrow().best) }
-#[wasm_bindgen] pub fn get_game_state() -> u32 { GAME.with(|game_cell| game_cell.borrow().state) }
-#[wasm_bindgen] pub fn get_current_level() -> u32 { 0 }
-#[wasm_bindgen] pub fn get_level_trans_tick() -> u32 { 0 }
-#[wasm_bindgen] pub fn get_tick() -> u32 { GAME.with(|game_cell| game_cell.borrow().tick) }
-#[wasm_bindgen] pub fn get_num_levels() -> u32 { 1 }
+#[wasm_bindgen]
+pub fn get_ball_x() -> f64 {
+    GAME.with(|game_cell| game_cell.borrow().ball.x)
+}
+#[wasm_bindgen]
+pub fn get_ball_y() -> f64 {
+    GAME.with(|game_cell| game_cell.borrow().ball.y)
+}
+#[wasm_bindgen]
+pub fn get_ball_hold_ticks() -> f64 {
+    GAME.with(|game_cell| game_cell.borrow().ball.hold_ticks)
+}
+#[wasm_bindgen]
+pub fn get_cam_x_target() -> f64 {
+    GAME.with(|game_cell| game_cell.borrow().cam_x_target)
+}
+#[wasm_bindgen]
+pub fn get_score() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().score)
+}
+#[wasm_bindgen]
+pub fn get_best() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().best)
+}
+#[wasm_bindgen]
+pub fn get_game_state() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().state)
+}
+#[wasm_bindgen]
+pub fn get_current_level() -> u32 {
+    0
+}
+#[wasm_bindgen]
+pub fn get_level_trans_tick() -> u32 {
+    0
+}
+#[wasm_bindgen]
+pub fn get_tick() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().tick)
+}
+#[wasm_bindgen]
+pub fn get_num_levels() -> u32 {
+    1
+}
 
 #[wasm_bindgen]
-pub fn get_level_end_x() -> f64 { -1.0 }
+pub fn get_level_end_x() -> f64 {
+    -1.0
+}
 
 #[wasm_bindgen]
 pub fn get_level_progress() -> f64 {
@@ -332,7 +431,9 @@ pub fn get_visible_platforms(min_x: f64, max_x: f64) -> Vec<f64> {
         let game = game_cell.borrow();
         let mut output = Vec::new();
         for platform in &game.platforms {
-            if platform.x + platform.w < min_x || platform.x > max_x { continue; }
+            if platform.x + platform.w < min_x || platform.x > max_x {
+                continue;
+            }
             output.push(platform.x);
             output.push(platform.y);
             output.push(platform.w);
