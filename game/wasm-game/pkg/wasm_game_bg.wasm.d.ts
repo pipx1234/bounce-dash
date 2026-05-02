@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const advance_level: () => void;
+export const get_countdown_max_ticks: () => number;
 export const get_current_level: () => number;
 export const get_level_end_x: () => number;
 export const get_num_levels: () => number;
@@ -12,6 +13,7 @@ export const get_ball_x: () => number;
 export const get_ball_y: () => number;
 export const get_best: () => number;
 export const get_cam_x_target: () => number;
+export const get_countdown_ticks: () => number;
 export const get_game_state: () => number;
 export const get_landed_platform_music: () => number;
 export const get_landing_count: () => number;

@@ -55,6 +55,22 @@ export function get_cam_x_target() {
 /**
  * @returns {number}
  */
+export function get_countdown_max_ticks() {
+    const ret = wasm.get_countdown_max_ticks();
+    return ret >>> 0;
+}
+
+/**
+ * @returns {number}
+ */
+export function get_countdown_ticks() {
+    const ret = wasm.get_countdown_ticks();
+    return ret >>> 0;
+}
+
+/**
+ * @returns {number}
+ */
 export function get_current_level() {
     const ret = wasm.get_current_level();
     return ret >>> 0;

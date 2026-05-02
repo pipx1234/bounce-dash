@@ -15,6 +15,10 @@ export function get_best(): number;
 
 export function get_cam_x_target(): number;
 
+export function get_countdown_max_ticks(): number;
+
+export function get_countdown_ticks(): number;
+
 export function get_current_level(): number;
 
 export function get_game_state(): number;
@@ -48,6 +52,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly advance_level: () => void;
+    readonly get_countdown_max_ticks: () => number;
     readonly get_current_level: () => number;
     readonly get_level_end_x: () => number;
     readonly get_num_levels: () => number;
@@ -58,6 +63,7 @@ export interface InitOutput {
     readonly get_ball_y: () => number;
     readonly get_best: () => number;
     readonly get_cam_x_target: () => number;
+    readonly get_countdown_ticks: () => number;
     readonly get_game_state: () => number;
     readonly get_landed_platform_music: () => number;
     readonly get_landing_count: () => number;

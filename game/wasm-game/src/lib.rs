@@ -21,6 +21,7 @@ const PLATFORM_Y_MIN: f64 = 108.0;
 const PLATFORM_Y_MAX: f64 = 404.0;
 const STREAM_AHEAD: f64 = 2600.0;
 const CLEAN_BEHIND: f64 = 360.0;
+const COUNTDOWN_MAX_TICKS: u32 = 720;
 
 struct Rng {
     seed: u32,
@@ -68,6 +69,7 @@ struct Platform {
     t: f64,
     visual_band: usize,
     music_seed: u32,
+    special: bool,
     lit: u32,
     falling: bool,
     fall_vy: f64,
@@ -97,6 +99,8 @@ struct Game {
     landing_count: u32,
     landed_platform_music: u32,
     opening_music_seed: u32,
+    countdown_ticks: u32,
+    clusters_until_special: u32,
 }
 
 impl Game {
@@ -122,6 +126,8 @@ impl Game {
             landing_count: 0,
             landed_platform_music: 1,
             opening_music_seed: 1,
+            countdown_ticks: COUNTDOWN_MAX_TICKS,
+            clusters_until_special: 3,
         };
         game.reset_with_seed(1);
         game
@@ -144,7 +150,9 @@ impl Game {
         self.landing_count = 0;
         self.landed_platform_music = seed.max(1);
         self.opening_music_seed = seed.max(1);
+        self.countdown_ticks = COUNTDOWN_MAX_TICKS;
         self.rng = Rng::new(seed);
+        self.clusters_until_special = 3 + (self.rng.next() * 3.0).floor() as u32;
 
         let mut opening_x = 40.0 + self.rng.next() * 18.0;
         let mut opening_y = 408.0 + (self.rng.next() * 2.0 - 1.0) * 18.0;
@@ -159,7 +167,7 @@ impl Game {
                     .max(PLATFORM_Y_MIN + 18.0)
                     .min(PLATFORM_Y_MAX + 26.0);
             }
-            let platform_seed = self.push_platform(opening_x, opening_y, 0.0);
+            let platform_seed = self.push_platform(opening_x, opening_y, 0.0, index == 2 || index == 7);
             self.opening_music_seed = self.opening_music_seed.rotate_left(5)
                 ^ platform_seed.wrapping_add((index as u32 + 1).wrapping_mul(0x9e3779b9));
         }
@@ -169,7 +177,7 @@ impl Game {
         self.spawn_until(START_X + STREAM_AHEAD);
     }
 
-    fn push_platform(&mut self, x: f64, y: f64, difficulty: f64) -> u32 {
+    fn push_platform(&mut self, x: f64, y: f64, difficulty: f64, special: bool) -> u32 {
         let raw_seed = (self.rng.next() * 4294967295.0).floor() as u32;
         let music_seed = raw_seed.max(1);
         self.platforms.push(Platform {
@@ -179,6 +187,7 @@ impl Game {
             t: difficulty,
             visual_band: (difficulty * 4.999).floor() as usize,
             music_seed,
+            special,
             lit: 0,
             falling: false,
             fall_vy: 0.0,
@@ -218,13 +227,19 @@ impl Game {
         } else {
             lerp(7.0, 0.0, sparse_ramp).round() as usize
         };
+        let is_special = self.clusters_until_special == 0;
+        if is_special {
+            self.clusters_until_special = 3 + (self.rng.next() * 3.0).floor() as u32;
+        } else {
+            self.clusters_until_special -= 1;
+        }
 
-        self.push_platform(path_x, path_y, difficulty);
+        self.push_platform(path_x, path_y, difficulty, is_special);
         for _ in 0..decoy_count {
             let scatter_x = path_x + (self.rng.next() * 2.0 - 1.0) * cluster_radius;
             let x = scatter_x.max(self.next_cluster_x - 50.0);
             let y = lerp(PLATFORM_Y_MIN, PLATFORM_Y_MAX, self.rng.next());
-            self.push_platform(x, y, difficulty);
+            self.push_platform(x, y, difficulty, false);
         }
 
         self.path_y = path_y;
@@ -239,6 +254,7 @@ impl Game {
 
     fn resolve_platforms(&mut self) {
         let mut landed_music = None;
+        let mut reset_countdown = false;
         for platform in self.platforms.iter_mut() {
             if platform.falling {
                 continue;
@@ -259,12 +275,16 @@ impl Game {
                 platform.fall_vy = 1.5;
                 platform.angle = 0.0;
                 landed_music = Some(platform.music_seed);
+                reset_countdown = platform.special;
                 break;
             }
         }
         if let Some(music_seed) = landed_music {
             self.landing_count = self.landing_count.wrapping_add(1);
             self.landed_platform_music = music_seed.max(1);
+        }
+        if reset_countdown {
+            self.countdown_ticks = COUNTDOWN_MAX_TICKS;
         }
     }
 
@@ -319,6 +339,11 @@ impl Game {
         self.ball.y += self.ball.vy;
 
         self.resolve_platforms();
+
+        self.countdown_ticks = self.countdown_ticks.saturating_sub(1);
+        if self.countdown_ticks == 0 {
+            self.state = 2;
+        }
 
         let distance = (((self.ball.x - START_X) / 10.0).floor() as i64).max(0) as u32;
         if distance > self.score {
@@ -433,6 +458,14 @@ pub fn get_opening_music_seed() -> u32 {
     GAME.with(|game_cell| game_cell.borrow().opening_music_seed)
 }
 #[wasm_bindgen]
+pub fn get_countdown_ticks() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().countdown_ticks)
+}
+#[wasm_bindgen]
+pub fn get_countdown_max_ticks() -> u32 {
+    COUNTDOWN_MAX_TICKS
+}
+#[wasm_bindgen]
 pub fn get_num_levels() -> u32 {
     1
 }
@@ -465,6 +498,7 @@ pub fn get_visible_platforms(min_x: f64, max_x: f64) -> Vec<f64> {
             output.push(if platform.falling { 1.0 } else { 0.0 });
             output.push(platform.fall_vy);
             output.push(platform.angle);
+            output.push(if platform.special { 1.0 } else { 0.0 });
         }
         output
     })

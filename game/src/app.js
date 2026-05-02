@@ -604,15 +604,33 @@ function drawTitleScreen(now) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 17px "Segoe UI", Arial';
-  ctx.fillText('Arrow keys to steer / how far can you go?', W / 2, 206);
+  ctx.fillText('MKULTRA conditioning program / find the signal blocks', W / 2, 206);
   ctx.fillStyle = `rgba(232, 255, 247, ${0.58 + pulse * 0.42})`;
   ctx.font = 'bold 20px "Segoe UI", Arial';
-  ctx.fillText('Press Space or Enter to start', W / 2, 272);
+  ctx.fillText('Press Space or Enter to begin conditioning', W / 2, 272);
   ctx.restore();
 }
 
-function drawPlatforms(fallbackLevel, platformData) {
-  const stride = 9;
+function drawSparkle(x, y, size, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#e9f5ff';
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.34, y - size * 0.34);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x + size * 0.34, y + size * 0.34);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size * 0.34, y + size * 0.34);
+  ctx.lineTo(x - size, y);
+  ctx.lineTo(x - size * 0.34, y - size * 0.34);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPlatforms(fallbackLevel, platformData, now) {
+  const stride = 10;
   for (let index = 0; index < platformData.length; index += stride) {
     const px = platformData[index];
     const py = platformData[index + 1];
@@ -623,13 +641,22 @@ function drawPlatforms(fallbackLevel, platformData) {
     const falling = platformData[index + 6] > 0.5;
     const fallVy = platformData[index + 7];
     const angle = platformData[index + 8];
+    const special = platformData[index + 9] > 0.5;
     const sx = px - camX;
     const baseR = Math.round(lerp(platformLevel.platA[0], platformLevel.platB[0], tint));
     const baseG = Math.round(lerp(platformLevel.platA[1], platformLevel.platB[1], tint));
     const baseB = Math.round(lerp(platformLevel.platA[2], platformLevel.platB[2], tint));
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.012 + px * 0.07);
     ctx.fillStyle = lit > 0
       ? `rgb(${Math.round(lerp(baseR, 255, lit))},${Math.round(lerp(baseG, 235, lit))},${Math.round(lerp(baseB, 100, lit))})`
+      : special
+        ? `rgb(${Math.round(lerp(190, 255, pulse))},${Math.round(lerp(80, 238, pulse))},${Math.round(lerp(220, 255, pulse))})`
       : `rgb(${baseR},${baseG},${baseB})`;
+    if (special && !falling) {
+      ctx.save();
+      ctx.shadowColor = `rgba(255, 230, 255, ${0.35 + pulse * 0.45})`;
+      ctx.shadowBlur = 10 + pulse * 16;
+    }
     if (falling) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - fallVy / 16);
@@ -645,7 +672,18 @@ function drawPlatforms(fallbackLevel, platformData) {
       ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.18)';
       ctx.fillRect(sx + 5, py + 2, pw - 10, 3);
+      if (special) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.45 + pulse * 0.4})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        for (let sparkle = 0; sparkle < 4; sparkle += 1) {
+          const sparkleX = sx + 12 + ((sparkle * 19 + now * 0.035) % Math.max(1, pw - 24));
+          const sparkleY = py - 7 + Math.sin(now * 0.005 + sparkle + px) * 5;
+          drawSparkle(sparkleX, sparkleY, 3 + pulse * 2, 0.35 + pulse * 0.55);
+        }
+      }
     }
+    if (special && !falling) ctx.restore();
   }
 }
 
@@ -695,9 +733,11 @@ function drawBall(worldX, by, holdTicks, active) {
   ctx.fill();
 }
 
-function drawHUD(score, best) {
+function drawHUD(score, best, countdownTicks) {
+  const countdownSeconds = Math.max(0, countdownTicks / 60);
+  const urgent = countdownTicks < 180;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  roundRect(10, 10, 170, 54, 6);
+  roundRect(10, 10, 190, 76, 6);
   ctx.fill();
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 15px "Segoe UI", Arial';
@@ -705,6 +745,9 @@ function drawHUD(score, best) {
   ctx.fillStyle = '#7a8fa0';
   ctx.font = '13px "Segoe UI", Arial';
   ctx.fillText(`Best: ${best} m`, 22, 52);
+  ctx.fillStyle = urgent ? '#ff6b6b' : '#e8fff7';
+  ctx.font = 'bold 13px "Segoe UI", Arial';
+  ctx.fillText(`COUNTDOWN: ${countdownSeconds.toFixed(1)} s`, 22, 72);
 }
 
 function drawGameOver(level) {
@@ -713,7 +756,7 @@ function drawGameOver(level) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ff6b6b';
   ctx.font = 'bold 52px "Segoe UI", Arial';
-  ctx.fillText('GAME OVER', W / 2, H / 2 - 72);
+  ctx.fillText('CONDITIONING LAPSE', W / 2, H / 2 - 72);
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 28px "Segoe UI", Arial';
   ctx.fillText(`${wasm.get_score()} m reached`, W / 2, H / 2 - 20);
@@ -722,7 +765,7 @@ function drawGameOver(level) {
   ctx.fillText(`Best: ${wasm.get_best()} m`, W / 2, H / 2 + 28);
   ctx.fillStyle = '#cccccc';
   ctx.font = '16px "Segoe UI", Arial';
-  ctx.fillText('Press Space or Enter to play again', W / 2, H / 2 + 64);
+  ctx.fillText('Press Space or Enter to learn again', W / 2, H / 2 + 64);
   ctx.textAlign = 'left';
 }
 
@@ -754,6 +797,7 @@ function loop(now) {
   const state = wasm.get_game_state();
   const level = THEME;
   const score = wasm.get_score();
+  const countdownTicks = wasm.get_countdown_ticks();
   musicDistance = score;
   const best = persistBest(wasm.get_best());
 
@@ -764,9 +808,9 @@ function loop(now) {
   }
 
   drawBg(level);
-  drawPlatforms(level, wasm.get_visible_platforms(camX - 200, camX + W + 200));
+  drawPlatforms(level, wasm.get_visible_platforms(camX - 200, camX + W + 200), now);
   drawBall(wasm.get_ball_x(), wasm.get_ball_y(), wasm.get_ball_hold_ticks(), state === 0);
-  drawHUD(score, best);
+  drawHUD(score, best, countdownTicks);
   if (state === 2) drawGameOver(level);
 
   requestAnimationFrame(loop);
