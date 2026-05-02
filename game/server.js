@@ -140,7 +140,7 @@ async function listScores(range) {
     ExclusiveStartKey = page.LastEvaluatedKey;
   } while (ExclusiveStartKey);
 
-  return formatScores(scores, 'all');
+  return formatScores(scores, range);
 }
 
 async function putScore({ runId, name, score }) {

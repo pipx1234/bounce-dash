@@ -8,6 +8,7 @@ const W = 800;
 const H = 480;
 const BALL_R = 11;
 const PLAT_H = 14;
+const LEADERBOARD_LIMIT = 10;
 const playerNameInput = document.getElementById('playerName');
 const scoreForm = document.getElementById('scoreForm');
 const scoreStatus = document.getElementById('scoreStatus');
@@ -91,7 +92,7 @@ async function startRun() {
 }
 
 function renderLeaderboards() {
-  const rows = leaderboards[activeRange] || [];
+  const rows = (leaderboards[activeRange] || []).slice(0, LEADERBOARD_LIMIT);
   if (!rows.length) {
     scoresEl.innerHTML = '<div id="emptyScores">No scores yet.</div>';
     return;
