@@ -140,9 +140,32 @@ const held = {};
 let submittedGameOverScore = null;
 let pendingScore = null;
 const ballTrail = [];
+let lastTrailSample = null;
 
 function resetBallTrail() {
   ballTrail.length = 0;
+  lastTrailSample = null;
+}
+
+function updateBallTrail(worldX, worldY, charge, active) {
+  for (const point of ballTrail) point.life -= active ? 0.018 : 0.045;
+
+  if (!active) {
+    while (ballTrail.length && ballTrail[0].life <= 0) ballTrail.shift();
+    return;
+  }
+
+  const previous = lastTrailSample;
+  if (previous && Math.hypot(worldX - previous.x, worldY - previous.y) > 120) resetBallTrail();
+
+  const distance = previous ? Math.hypot(worldX - previous.x, worldY - previous.y) : Infinity;
+  if (!previous || distance >= 3.5) {
+    ballTrail.push({ x: worldX, y: worldY, charge, life: 1 });
+    lastTrailSample = { x: worldX, y: worldY };
+  }
+
+  while (ballTrail.length > 18) ballTrail.shift();
+  while (ballTrail.length && ballTrail[0].life <= 0) ballTrail.shift();
 }
 
 async function beginGame() {
@@ -335,16 +358,14 @@ function drawPlatforms(fallbackLevel, platformData) {
   }
 }
 
-function drawBall(bx, by, holdTicks) {
+function drawBall(worldX, by, holdTicks, active) {
+  const bx = worldX - camX;
   const charge = holdTicks / 45;
   const tailR = Math.round(lerp(126, 70, charge));
   const tailG = Math.round(lerp(184, 230, charge));
   const tailB = Math.round(lerp(247, 210, charge));
 
-  const previous = ballTrail[ballTrail.length - 1];
-  if (previous && Math.hypot(bx - previous.x, by - previous.y) > 90) resetBallTrail();
-  ballTrail.push({ x: bx, y: by, charge });
-  while (ballTrail.length > 14) ballTrail.shift();
+  updateBallTrail(worldX, by, charge, active);
 
   ctx.save();
   ctx.lineCap = 'round';
@@ -352,12 +373,16 @@ function drawBall(bx, by, holdTicks) {
   for (let index = 1; index < ballTrail.length; index += 1) {
     const from = ballTrail[index - 1];
     const to = ballTrail[index];
-    const age = index / (ballTrail.length - 1);
-    ctx.strokeStyle = `rgba(${tailR},${tailG},${tailB},${0.05 + age * (0.22 + charge * 0.16)})`;
-    ctx.lineWidth = 2 + age * (BALL_R * (0.8 + charge * 0.35));
+    const age = index / Math.max(1, ballTrail.length - 1);
+    const alpha = Math.min(from.life, to.life) * (0.03 + age * (0.16 + charge * 0.12));
+    const width = 1.5 + age * (BALL_R * (0.55 + charge * 0.22));
+    const controlX = ((from.x + to.x) / 2) - camX;
+    const controlY = (from.y + to.y) / 2;
+    ctx.strokeStyle = `rgba(${tailR},${tailG},${tailB},${alpha})`;
+    ctx.lineWidth = width;
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(from.x - camX, from.y);
+    ctx.quadraticCurveTo(controlX, controlY, to.x - camX, to.y);
     ctx.stroke();
   }
   ctx.restore();
@@ -438,7 +463,7 @@ function loop(now) {
 
   drawBg(level);
   drawPlatforms(level, wasm.get_visible_platforms(camX - 200, camX + W + 200));
-  drawBall(wasm.get_ball_x() - camX, wasm.get_ball_y(), wasm.get_ball_hold_ticks());
+  drawBall(wasm.get_ball_x(), wasm.get_ball_y(), wasm.get_ball_hold_ticks(), state === 0);
   drawHUD(score, wasm.get_best());
   if (state === 2) drawGameOver(level);
 
