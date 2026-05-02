@@ -18,6 +18,8 @@ const scoresEl = document.getElementById('scores');
 const tabButtons = [...document.querySelectorAll('#tabs button')];
 const musicToggle = document.getElementById('musicToggle');
 const MUSIC_KEY = 'cometio_music';
+const MUSIC_MAX_GAIN = 0.58;
+const MUSIC_FADE_MS = 10000;
 
 function syncLeaderboardHeight() {
   if (!leaderboardEl) return;
@@ -92,6 +94,7 @@ let musicStep = 0;
 let musicDistance = 0;
 let musicPlatformSeed = 1;
 let observedLandingCount = 0;
+let musicRunStartedAt = 0;
 
 function updateMusicToggle() {
   if (!musicToggle) return;
@@ -121,15 +124,6 @@ function seededUnit(seed, salt) {
   value ^= value >>> 17;
   value ^= value << 5;
   return (value >>> 0) / 4294967296;
-}
-
-function randomMusicSeed() {
-  if (window.crypto?.getRandomValues) {
-    const values = new Uint32Array(1);
-    window.crypto.getRandomValues(values);
-    return values[0] || 1;
-  }
-  return Math.floor(Math.random() * 4294967295) || 1;
 }
 
 function platformMusicProfile(seed) {
@@ -311,13 +305,28 @@ function applyPlatformMusic(seed) {
   scheduleMusic();
 }
 
+function setMusicGain(value, timeConstant = 0.2) {
+  if (!audioContext || !musicGain) return;
+  musicGain.gain.cancelScheduledValues(audioContext.currentTime);
+  musicGain.gain.setTargetAtTime(value, audioContext.currentTime, timeConstant);
+}
+
+function resetMusicFade(now = performance.now()) {
+  musicRunStartedAt = now;
+  setMusicGain(0, 0.02);
+}
+
+function updateMusicFade(now) {
+  if (!musicEnabled || !audioContext || !musicGain || phase !== 'playing' || !musicRunStartedAt) return;
+  const fade = Math.max(0, Math.min(1, (now - musicRunStartedAt) / MUSIC_FADE_MS));
+  setMusicGain(MUSIC_MAX_GAIN * fade, 0.28);
+}
+
 async function startMusic() {
   if (!musicEnabled) return;
   const context = getAudioContext();
   if (!context || !musicGain) return;
   if (context.state === 'suspended') await context.resume();
-  musicGain.gain.cancelScheduledValues(context.currentTime);
-  musicGain.gain.setTargetAtTime(0.58, context.currentTime, 0.18);
   scheduleMusic();
   if (!musicTimer) musicTimer = setInterval(scheduleMusic, 280);
 }
@@ -331,6 +340,7 @@ function stopMusic() {
     musicTimer = null;
   }
   nextMusicTime = audioContext.currentTime + 0.2;
+  musicRunStartedAt = 0;
 }
 
 updateMusicToggle();
@@ -436,7 +446,6 @@ async function beginGame() {
   if (phase === 'starting') return;
   musicDistance = 0;
   observedLandingCount = 0;
-  applyPlatformMusic(randomMusicSeed());
   await startMusic();
   phase = 'starting';
   setScoreForm(false);
@@ -444,12 +453,13 @@ async function beginGame() {
   pendingScore = null;
   resetBallTrail();
   await startRun();
-  applyPlatformMusic(currentRun.seed);
   wasm.game_init(localBest, currentRun.seed);
+  applyPlatformMusic(wasm.get_opening_music_seed());
   phase = 'playing';
   camX = 0;
   tickAccum = 0;
   lastTime = performance.now();
+  resetMusicFade(lastTime);
 }
 
 document.addEventListener('keydown', async (event) => {
@@ -718,10 +728,13 @@ function drawGameOver(level) {
 
 function loop(now) {
   if (phase !== 'playing') {
+    if (audioContext && musicGain) setMusicGain(0, 0.35);
     drawTitleScreen(now);
     requestAnimationFrame(loop);
     return;
   }
+
+  updateMusicFade(now);
 
   tickAccum += Math.min(now - lastTime, 250);
   lastTime = now;

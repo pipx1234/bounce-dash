@@ -31,6 +31,8 @@ export function get_level_trans_tick(): number;
 
 export function get_num_levels(): number;
 
+export function get_opening_music_seed(): number;
+
 export function get_score(): number;
 
 export function get_tick(): number;
@@ -59,6 +61,7 @@ export interface InitOutput {
     readonly get_game_state: () => number;
     readonly get_landed_platform_music: () => number;
     readonly get_landing_count: () => number;
+    readonly get_opening_music_seed: () => number;
     readonly get_score: () => number;
     readonly get_tick: () => number;
     readonly game_init: (a: number, b: number) => void;

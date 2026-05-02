@@ -96,6 +96,7 @@ struct Game {
     tick: u32,
     landing_count: u32,
     landed_platform_music: u32,
+    opening_music_seed: u32,
 }
 
 impl Game {
@@ -120,6 +121,7 @@ impl Game {
             tick: 0,
             landing_count: 0,
             landed_platform_music: 1,
+            opening_music_seed: 1,
         };
         game.reset_with_seed(1);
         game
@@ -141,6 +143,7 @@ impl Game {
         self.tick = 0;
         self.landing_count = 0;
         self.landed_platform_music = seed.max(1);
+        self.opening_music_seed = seed.max(1);
         self.rng = Rng::new(seed);
 
         let mut opening_x = 40.0 + self.rng.next() * 18.0;
@@ -156,7 +159,9 @@ impl Game {
                     .max(PLATFORM_Y_MIN + 18.0)
                     .min(PLATFORM_Y_MAX + 26.0);
             }
-            self.push_platform(opening_x, opening_y, 0.0);
+            let platform_seed = self.push_platform(opening_x, opening_y, 0.0);
+            self.opening_music_seed = self.opening_music_seed.rotate_left(5)
+                ^ platform_seed.wrapping_add((index as u32 + 1).wrapping_mul(0x9e3779b9));
         }
 
         self.path_y = opening_y.min(PLATFORM_Y_MAX).max(PLATFORM_Y_MIN);
@@ -164,20 +169,22 @@ impl Game {
         self.spawn_until(START_X + STREAM_AHEAD);
     }
 
-    fn push_platform(&mut self, x: f64, y: f64, difficulty: f64) {
+    fn push_platform(&mut self, x: f64, y: f64, difficulty: f64) -> u32 {
         let raw_seed = (self.rng.next() * 4294967295.0).floor() as u32;
+        let music_seed = raw_seed.max(1);
         self.platforms.push(Platform {
             x,
             y,
             w: PLATFORM_W,
             t: difficulty,
             visual_band: (difficulty * 4.999).floor() as usize,
-            music_seed: raw_seed.max(1),
+            music_seed,
             lit: 0,
             falling: false,
             fall_vy: 0.0,
             angle: 0.0,
         });
+        music_seed
     }
 
     fn gen_next_cluster(&mut self) {
@@ -420,6 +427,10 @@ pub fn get_landing_count() -> u32 {
 #[wasm_bindgen]
 pub fn get_landed_platform_music() -> u32 {
     GAME.with(|game_cell| game_cell.borrow().landed_platform_music)
+}
+#[wasm_bindgen]
+pub fn get_opening_music_seed() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().opening_music_seed)
 }
 #[wasm_bindgen]
 pub fn get_num_levels() -> u32 {

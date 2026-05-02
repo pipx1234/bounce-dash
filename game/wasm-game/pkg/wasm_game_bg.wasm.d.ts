@@ -15,6 +15,7 @@ export const get_cam_x_target: () => number;
 export const get_game_state: () => number;
 export const get_landed_platform_music: () => number;
 export const get_landing_count: () => number;
+export const get_opening_music_seed: () => number;
 export const get_score: () => number;
 export const get_tick: () => number;
 export const game_init: (a: number, b: number) => void;

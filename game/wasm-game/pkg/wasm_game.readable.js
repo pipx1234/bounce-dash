@@ -119,6 +119,14 @@ export function get_num_levels() {
 /**
  * @returns {number}
  */
+export function get_opening_music_seed() {
+    const ret = wasm.get_opening_music_seed();
+    return ret >>> 0;
+}
+
+/**
+ * @returns {number}
+ */
 export function get_score() {
     const ret = wasm.get_score();
     return ret >>> 0;
