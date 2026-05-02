@@ -19,6 +19,10 @@ export function get_current_level(): number;
 
 export function get_game_state(): number;
 
+export function get_landed_platform_music(): number;
+
+export function get_landing_count(): number;
+
 export function get_level_end_x(): number;
 
 export function get_level_progress(): number;
@@ -53,6 +57,8 @@ export interface InitOutput {
     readonly get_best: () => number;
     readonly get_cam_x_target: () => number;
     readonly get_game_state: () => number;
+    readonly get_landed_platform_music: () => number;
+    readonly get_landing_count: () => number;
     readonly get_score: () => number;
     readonly get_tick: () => number;
     readonly game_init: (a: number, b: number) => void;

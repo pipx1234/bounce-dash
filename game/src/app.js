@@ -90,6 +90,8 @@ let musicTimer = null;
 let nextMusicTime = 0;
 let musicStep = 0;
 let musicDistance = 0;
+let musicPlatformSeed = 1;
+let observedLandingCount = 0;
 
 function updateMusicToggle() {
   if (!musicToggle) return;
@@ -111,6 +113,55 @@ function getAudioContext() {
 
 function semitone(frequency, steps) {
   return frequency * (2 ** (steps / 12));
+}
+
+function seededUnit(seed, salt) {
+  let value = (seed ^ Math.imul(salt, 2654435761)) >>> 0;
+  value ^= value << 13;
+  value ^= value >>> 17;
+  value ^= value << 5;
+  return (value >>> 0) / 4294967296;
+}
+
+function randomMusicSeed() {
+  if (window.crypto?.getRandomValues) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0] || 1;
+  }
+  return Math.floor(Math.random() * 4294967295) || 1;
+}
+
+function platformMusicProfile(seed) {
+  const roots = [146.83, 164.81, 174.61, 196.0, 220.0, 246.94];
+  const noteSets = [
+    [0, 4, 7, 11, 14],
+    [0, 3, 7, 10, 14],
+    [0, 2, 7, 9, 12],
+    [0, 5, 7, 10, 15],
+  ];
+  const patterns = [
+    [0, 2, 1, 3, 2, 4, 3, 1, 0, 3, 1, 4, 2, 3, 1, 2],
+    [0, 1, 3, 2, 4, 2, 3, 1, 0, 2, 4, 3, 1, 3, 2, 1],
+    [0, 3, 4, 2, 1, 4, 2, 3, 0, 4, 1, 3, 2, 4, 3, 1],
+    [0, 2, 4, 3, 1, 3, 4, 2, 0, 1, 4, 2, 3, 2, 4, 1],
+  ];
+  const progressions = [
+    [0, 5, 2, -2],
+    [0, -3, 4, 7],
+    [0, 7, 3, -5],
+    [0, 2, -2, 5],
+  ];
+
+  return {
+    root: roots[Math.floor(seededUnit(seed, 1) * roots.length)],
+    notes: noteSets[Math.floor(seededUnit(seed, 2) * noteSets.length)],
+    pattern: patterns[Math.floor(seededUnit(seed, 3) * patterns.length)],
+    progression: progressions[Math.floor(seededUnit(seed, 4) * progressions.length)],
+    brightness: lerp(0.82, 1.26, seededUnit(seed, 5)),
+    swing: lerp(-0.018, 0.028, seededUnit(seed, 6)),
+    detune: lerp(-10, 10, seededUnit(seed, 7)),
+  };
 }
 
 function scheduleTone({
@@ -164,39 +215,34 @@ function scheduleMusic() {
 
   const intensity = Math.min(1, musicDistance / 5200);
   const beatLength = lerp(0.34, 0.17, intensity);
-  const arpPattern = [0, 2, 1, 3, 2, 4, 3, 1, 0, 3, 1, 4, 2, 3, 1, 2];
-  const chords = [
-    { root: 174.61, notes: [0, 4, 7, 11, 14] },
-    { root: 220.0, notes: [0, 3, 7, 10, 14] },
-    { root: 196.0, notes: [0, 4, 7, 9, 12] },
-    { root: 164.81, notes: [0, 3, 7, 10, 14] },
-  ];
+  const profile = platformMusicProfile(musicPlatformSeed);
 
   while (nextMusicTime < context.currentTime + 1.8) {
-    const chord = chords[Math.floor(musicStep / 16) % chords.length];
-    const patternIndex = arpPattern[musicStep % arpPattern.length];
+    const chordRoot = semitone(profile.root, profile.progression[Math.floor(musicStep / 16) % profile.progression.length]);
+    const patternIndex = profile.pattern[musicStep % profile.pattern.length];
     const octave = musicStep % 8 >= 5 ? 2 : 1;
     const pan = Math.sin(musicStep * 0.72) * 0.38;
-    const leadFrequency = semitone(chord.root, chord.notes[patternIndex]) * octave;
+    const leadFrequency = semitone(chordRoot, profile.notes[patternIndex]) * octave;
     const leadDuration = lerp(0.11, 0.08, intensity);
+    const startTime = nextMusicTime + (musicStep % 2 === 1 ? profile.swing : 0);
 
     scheduleTone({
       frequency: leadFrequency,
-      startTime: nextMusicTime,
+      startTime,
       duration: leadDuration,
       volume: lerp(0.055, 0.074, intensity),
       panAmount: pan,
       type: 'square',
       attack: 0.004,
       release: 0.035,
-      filterFrequency: lerp(1800, 4200, intensity),
-      detune: Math.sin(musicStep * 1.7) * 4,
+      filterFrequency: lerp(1800, 4200, intensity) * profile.brightness,
+      detune: profile.detune + Math.sin(musicStep * 1.7) * 4,
     });
 
     if (musicStep % 4 === 0) {
       scheduleTone({
-        frequency: chord.root * 0.5,
-        startTime: nextMusicTime,
+        frequency: chordRoot * 0.5,
+        startTime,
         duration: beatLength * 1.6,
         volume: 0.05,
         panAmount: -0.1,
@@ -208,10 +254,10 @@ function scheduleMusic() {
     }
 
     if (musicStep % 16 === 0) {
-      for (const chordNote of chord.notes.slice(0, 4)) {
+      for (const chordNote of profile.notes.slice(0, 4)) {
         scheduleTone({
-          frequency: semitone(chord.root, chordNote),
-          startTime: nextMusicTime,
+          frequency: semitone(chordRoot, chordNote),
+          startTime,
           duration: 2.8,
           volume: 0.012,
           panAmount: Math.sin(chordNote) * 0.28,
@@ -227,7 +273,7 @@ function scheduleMusic() {
     if (intensity > 0.32 && musicStep % 2 === 1) {
       scheduleTone({
         frequency: leadFrequency * 2,
-        startTime: nextMusicTime + beatLength * 0.5,
+        startTime: startTime + beatLength * 0.5,
         duration: 0.055,
         volume: lerp(0.018, 0.035, intensity),
         panAmount: -pan,
@@ -240,8 +286,8 @@ function scheduleMusic() {
 
     if (intensity > 0.68 && musicStep % 4 === 2) {
       scheduleTone({
-        frequency: semitone(chord.root, chord.notes[(patternIndex + 2) % chord.notes.length]) * 3,
-        startTime: nextMusicTime + beatLength * 0.25,
+        frequency: semitone(chordRoot, profile.notes[(patternIndex + 2) % profile.notes.length]) * 3,
+        startTime: startTime + beatLength * 0.25,
         duration: 0.045,
         volume: 0.022,
         panAmount: pan * 0.6,
@@ -255,6 +301,14 @@ function scheduleMusic() {
     nextMusicTime += beatLength;
     musicStep += 1;
   }
+}
+
+function applyPlatformMusic(seed) {
+  musicPlatformSeed = seed || 1;
+  musicStep = Math.floor(seededUnit(musicPlatformSeed, 8) * 64);
+  if (!audioContext || !musicEnabled) return;
+  nextMusicTime = Math.min(nextMusicTime, audioContext.currentTime + 0.08);
+  scheduleMusic();
 }
 
 async function startMusic() {
@@ -381,6 +435,8 @@ function updateBallTrail(worldX, worldY, charge, active) {
 async function beginGame() {
   if (phase === 'starting') return;
   musicDistance = 0;
+  observedLandingCount = 0;
+  applyPlatformMusic(randomMusicSeed());
   await startMusic();
   phase = 'starting';
   setScoreForm(false);
@@ -388,6 +444,7 @@ async function beginGame() {
   pendingScore = null;
   resetBallTrail();
   await startRun();
+  applyPlatformMusic(currentRun.seed);
   wasm.game_init(localBest, currentRun.seed);
   phase = 'playing';
   camX = 0;
@@ -670,6 +727,11 @@ function loop(now) {
   lastTime = now;
   while (tickAccum >= TICK_MS) {
     wasm.update(!!(held.ArrowLeft || held.a), !!(held.ArrowRight || held.d));
+    const landingCount = wasm.get_landing_count();
+    if (landingCount !== observedLandingCount) {
+      observedLandingCount = landingCount;
+      applyPlatformMusic(wasm.get_landed_platform_music());
+    }
     tickAccum -= TICK_MS;
   }
 

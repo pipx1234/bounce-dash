@@ -71,6 +71,22 @@ export function get_game_state() {
 /**
  * @returns {number}
  */
+export function get_landed_platform_music() {
+    const ret = wasm.get_landed_platform_music();
+    return ret >>> 0;
+}
+
+/**
+ * @returns {number}
+ */
+export function get_landing_count() {
+    const ret = wasm.get_landing_count();
+    return ret >>> 0;
+}
+
+/**
+ * @returns {number}
+ */
 export function get_level_end_x() {
     const ret = wasm.get_level_end_x();
     return ret;

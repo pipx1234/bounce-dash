@@ -67,6 +67,7 @@ struct Platform {
     w: f64,
     t: f64,
     visual_band: usize,
+    music_seed: u32,
     lit: u32,
     falling: bool,
     fall_vy: f64,
@@ -93,6 +94,8 @@ struct Game {
     path_y: f64,
     rng: Rng,
     tick: u32,
+    landing_count: u32,
+    landed_platform_music: u32,
 }
 
 impl Game {
@@ -115,6 +118,8 @@ impl Game {
             path_y: 360.0,
             rng: Rng::new(1),
             tick: 0,
+            landing_count: 0,
+            landed_platform_music: 1,
         };
         game.reset_with_seed(1);
         game
@@ -134,48 +139,40 @@ impl Game {
         self.score = 0;
         self.state = 0;
         self.tick = 0;
+        self.landing_count = 0;
+        self.landed_platform_music = seed.max(1);
         self.rng = Rng::new(seed);
 
-        let opening = [
-            (42.0, 420.0),
-            (126.0, 372.0),
-            (205.0, 430.0),
-            (284.0, 304.0),
-            (358.0, 382.0),
-            (448.0, 260.0),
-            (525.0, 335.0),
-            (604.0, 406.0),
-            (686.0, 286.0),
-            (764.0, 360.0),
-            (848.0, 248.0),
-        ];
-
-        for (x, y) in opening {
-            self.platforms.push(Platform {
-                x,
-                y,
-                w: PLATFORM_W,
-                t: 0.0,
-                visual_band: 0,
-                lit: 0,
-                falling: false,
-                fall_vy: 0.0,
-                angle: 0.0,
-            });
+        let mut opening_x = 40.0 + self.rng.next() * 18.0;
+        let mut opening_y = 408.0 + (self.rng.next() * 2.0 - 1.0) * 18.0;
+        for index in 0..11 {
+            if index == 1 {
+                opening_x = 118.0 + self.rng.next() * 26.0;
+                opening_y = 358.0 + self.rng.next() * 34.0;
+            } else if index > 1 {
+                opening_x += lerp(66.0, 94.0, self.rng.next());
+                let vertical_delta = (self.rng.next() * 2.0 - 1.0) * lerp(52.0, 92.0, index as f64 / 10.0);
+                opening_y = (opening_y + vertical_delta)
+                    .max(PLATFORM_Y_MIN + 18.0)
+                    .min(PLATFORM_Y_MAX + 26.0);
+            }
+            self.push_platform(opening_x, opening_y, 0.0);
         }
 
-        self.path_y = 360.0;
-        self.next_cluster_x = 880.0;
+        self.path_y = opening_y.min(PLATFORM_Y_MAX).max(PLATFORM_Y_MIN);
+        self.next_cluster_x = opening_x + lerp(72.0, 108.0, self.rng.next());
         self.spawn_until(START_X + STREAM_AHEAD);
     }
 
     fn push_platform(&mut self, x: f64, y: f64, difficulty: f64) {
+        let raw_seed = (self.rng.next() * 4294967295.0).floor() as u32;
         self.platforms.push(Platform {
             x,
             y,
             w: PLATFORM_W,
             t: difficulty,
             visual_band: (difficulty * 4.999).floor() as usize,
+            music_seed: raw_seed.max(1),
             lit: 0,
             falling: false,
             fall_vy: 0.0,
@@ -234,6 +231,7 @@ impl Game {
     }
 
     fn resolve_platforms(&mut self) {
+        let mut landed_music = None;
         for platform in self.platforms.iter_mut() {
             if platform.falling {
                 continue;
@@ -253,8 +251,13 @@ impl Game {
                 platform.falling = true;
                 platform.fall_vy = 1.5;
                 platform.angle = 0.0;
+                landed_music = Some(platform.music_seed);
                 break;
             }
+        }
+        if let Some(music_seed) = landed_music {
+            self.landing_count = self.landing_count.wrapping_add(1);
+            self.landed_platform_music = music_seed.max(1);
         }
     }
 
@@ -409,6 +412,14 @@ pub fn get_level_trans_tick() -> u32 {
 #[wasm_bindgen]
 pub fn get_tick() -> u32 {
     GAME.with(|game_cell| game_cell.borrow().tick)
+}
+#[wasm_bindgen]
+pub fn get_landing_count() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().landing_count)
+}
+#[wasm_bindgen]
+pub fn get_landed_platform_music() -> u32 {
+    GAME.with(|game_cell| game_cell.borrow().landed_platform_music)
 }
 #[wasm_bindgen]
 pub fn get_num_levels() -> u32 {
