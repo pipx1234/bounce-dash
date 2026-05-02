@@ -21,7 +21,7 @@
       display: grid;
       grid-template-columns: minmax(0, 800px) 280px;
       gap: 18px;
-      align-items: start;
+      align-items: stretch;
       width: min(1120px, 100%);
     }
     #gameColumn { min-width: 0; }
@@ -37,7 +37,8 @@
     }
     #leaderboard {
       width: 100%;
-      min-height: 480px;
+      height: 100%;
+      min-height: 0;
       overflow: hidden;
       border: 1px solid rgba(126, 184, 247, 0.32);
       border-radius: 8px;
@@ -103,8 +104,8 @@
     }
     #scores {
       display: grid;
-      gap: 4px;
-      max-height: 286px;
+      gap: 3px;
+      max-height: 247px;
       overflow: hidden;
     }
     .scoreRow {
@@ -112,10 +113,10 @@
       grid-template-columns: 28px minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
-      height: 25px;
+      height: 22px;
       border-bottom: 1px solid rgba(126, 184, 247, 0.08);
       color: #dcecff;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
     }
     .scoreRow span:first-child { color: #46d296; font-weight: 800; }
     .scoreRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -128,7 +129,7 @@
     @media (max-width: 980px) {
       body { padding: 12px; }
       #shell { grid-template-columns: 1fr; }
-      #leaderboard { min-height: 0; }
+      #leaderboard { height: auto; min-height: 0; }
     }
   </style>
 </head>

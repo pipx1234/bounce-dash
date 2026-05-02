@@ -186,8 +186,8 @@ impl Game {
     fn gen_next_cluster(&mut self) {
         let meters = meters_at_x(self.next_cluster_x);
         let difficulty = difficulty_at_x(self.next_cluster_x);
-        let sparse_ramp = smoothstep(2400.0, 6000.0, meters);
-        let precision_ramp = smoothstep(4200.0, 6000.0, meters);
+        let sparse_ramp = smoothstep(1600.0, 5400.0, meters);
+        let precision_ramp = smoothstep(3600.0, 6000.0, meters);
         let vertical_span = lerp(54.0, 118.0, difficulty) + precision_ramp * 18.0;
         let raw_delta = (self.rng.next() * 2.0 - 1.0) * vertical_span;
         let path_y = (self.path_y + raw_delta)
