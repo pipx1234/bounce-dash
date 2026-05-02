@@ -14,3 +14,9 @@ variable "project_name" {
     error_message = "project_name must be 4-30 lowercase alphanumeric characters or hyphens, starting with a letter."
   }
 }
+
+variable "instance_type" {
+  description = "EC2 instance type for the game server"
+  type        = string
+  default     = "t3.micro"
+}

@@ -5,6 +5,13 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/.terraform.tfstate.lock.info
 
+# Node
+game/node_modules/
+game/scores.json
+
+# Rust/WASM build cache
+game/wasm-game/target/
+
 # OS
 .DS_Store
 Thumbs.db

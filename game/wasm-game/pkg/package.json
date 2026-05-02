@@ -1,0 +1,15 @@
+{
+  "name": "wasm-game",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "wasm_game_bg.wasm",
+    "wasm_game.js",
+    "wasm_game.d.ts"
+  ],
+  "main": "wasm_game.js",
+  "types": "wasm_game.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

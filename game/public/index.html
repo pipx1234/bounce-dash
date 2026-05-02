@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bounce Dash</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #06060f;
+      color: #7eb8f7;
+      font-family: "Segoe UI", system-ui, Arial, sans-serif;
+      user-select: none;
+      padding: 20px;
+    }
+    #shell {
+      display: grid;
+      grid-template-columns: minmax(0, 800px) 280px;
+      gap: 18px;
+      align-items: start;
+      width: min(1120px, 100%);
+    }
+    #gameColumn { min-width: 0; }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 5 / 3;
+      border: 2px solid #7eb8f7;
+      border-radius: 8px;
+      background: #06060f;
+      box-shadow: 0 0 40px rgba(126, 184, 247, 0.2);
+    }
+    #leaderboard {
+      width: 100%;
+      min-height: 480px;
+      border: 1px solid rgba(126, 184, 247, 0.32);
+      border-radius: 8px;
+      background: rgba(7, 10, 24, 0.82);
+      box-shadow: 0 0 32px rgba(40, 190, 150, 0.1);
+      padding: 14px;
+    }
+    #leaderboard h2 {
+      margin-bottom: 10px;
+      color: #e9f5ff;
+      font-size: 1rem;
+      letter-spacing: 1px;
+    }
+    #tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    #tabs button, #submitScore {
+      min-height: 32px;
+      border: 1px solid rgba(126, 184, 247, 0.28);
+      border-radius: 6px;
+      background: rgba(126, 184, 247, 0.08);
+      color: #bfdcff;
+      font: 700 0.75rem "Segoe UI", system-ui, sans-serif;
+      cursor: pointer;
+    }
+    #tabs button.active, #submitScore {
+      background: rgba(70, 210, 150, 0.18);
+      border-color: rgba(70, 210, 150, 0.72);
+      color: #e8fff7;
+    }
+    #scoreForm {
+      display: none;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(126, 184, 247, 0.18);
+    }
+    #scoreForm.show { display: block; }
+    #scoreForm label {
+      display: block;
+      margin-bottom: 6px;
+      color: #7a8fa0;
+      font-size: 0.75rem;
+    }
+    #playerName {
+      width: 100%;
+      height: 34px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(126, 184, 247, 0.3);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.28);
+      color: #ffffff;
+      padding: 0 10px;
+      font: 700 0.9rem "Segoe UI", system-ui, sans-serif;
+    }
+    #scoreStatus {
+      min-height: 18px;
+      margin-top: 7px;
+      color: #7a8fa0;
+      font-size: 0.75rem;
+    }
+    #scores {
+      display: grid;
+      gap: 7px;
+    }
+    .scoreRow {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      border-bottom: 1px solid rgba(126, 184, 247, 0.08);
+      color: #dcecff;
+      font-size: 0.85rem;
+    }
+    .scoreRow span:first-child { color: #46d296; font-weight: 800; }
+    .scoreRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .scoreRow em { color: #7eb8f7; font-style: normal; font-weight: 800; }
+    #emptyScores {
+      color: #657184;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    @media (max-width: 980px) {
+      body { padding: 12px; }
+      #shell { grid-template-columns: 1fr; }
+      #leaderboard { min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main id="shell">
+    <section id="gameColumn">
+      <canvas id="c" width="800" height="480"></canvas>
+    </section>
+    <aside id="leaderboard" aria-label="Leaderboard">
+      <h2>LEADERBOARD</h2>
+      <div id="scoreForm">
+        <label for="playerName">Name for this run</label>
+        <input id="playerName" maxlength="16" autocomplete="nickname" />
+        <button id="submitScore" type="button">Submit Score</button>
+        <div id="scoreStatus"></div>
+      </div>
+      <div id="tabs">
+        <button type="button" data-range="daily" class="active">Daily</button>
+        <button type="button" data-range="weekly">Weekly</button>
+        <button type="button" data-range="all">All Time</button>
+      </div>
+      <div id="scores"></div>
+    </aside>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
