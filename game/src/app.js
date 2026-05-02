@@ -16,6 +16,8 @@ const scoreStatus = document.getElementById('scoreStatus');
 const submitScoreButton = document.getElementById('submitScore');
 const scoresEl = document.getElementById('scores');
 const tabButtons = [...document.querySelectorAll('#tabs button')];
+const musicToggle = document.getElementById('musicToggle');
+const MUSIC_KEY = 'cometio_music';
 
 function syncLeaderboardHeight() {
   if (!leaderboardEl) return;
@@ -81,6 +83,103 @@ let activeRange = 'daily';
 let leaderboards = { daily: [], weekly: [], all: [] };
 let currentRun = null;
 let phase = 'title';
+let musicEnabled = localStorage.getItem(MUSIC_KEY) !== 'off';
+let audioContext = null;
+let musicGain = null;
+let musicTimer = null;
+let nextMusicTime = 0;
+let musicStep = 0;
+
+function updateMusicToggle() {
+  if (!musicToggle) return;
+  musicToggle.textContent = musicEnabled ? 'Music On' : 'Music Off';
+  musicToggle.setAttribute('aria-pressed', String(musicEnabled));
+}
+
+function getAudioContext() {
+  if (audioContext) return audioContext;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  audioContext = new AudioContextClass();
+  musicGain = audioContext.createGain();
+  musicGain.gain.value = 0;
+  musicGain.connect(audioContext.destination);
+  nextMusicTime = audioContext.currentTime + 0.1;
+  return audioContext;
+}
+
+function scheduleTone(frequency, startTime, duration, volume, panAmount) {
+  const context = getAudioContext();
+  if (!context || !musicGain) return;
+
+  const oscillator = context.createOscillator();
+  const toneGain = context.createGain();
+  const filter = context.createBiquadFilter();
+  const panner = context.createStereoPanner ? context.createStereoPanner() : null;
+
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(820, startTime);
+  filter.Q.setValueAtTime(0.6, startTime);
+  toneGain.gain.setValueAtTime(0, startTime);
+  toneGain.gain.linearRampToValueAtTime(volume, startTime + 1.2);
+  toneGain.gain.linearRampToValueAtTime(volume * 0.62, startTime + duration - 1.2);
+  toneGain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+  oscillator.connect(filter);
+  if (panner) {
+    panner.pan.setValueAtTime(panAmount, startTime);
+    filter.connect(panner);
+    panner.connect(toneGain);
+  } else {
+    filter.connect(toneGain);
+  }
+  toneGain.connect(musicGain);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.05);
+}
+
+function scheduleMusic() {
+  const context = getAudioContext();
+  if (!context || !musicEnabled) return;
+
+  const roots = [164.81, 196.0, 220.0, 246.94, 196.0, 146.83];
+  while (nextMusicTime < context.currentTime + 3.5) {
+    const root = roots[musicStep % roots.length];
+    const pan = Math.sin(musicStep * 0.85) * 0.45;
+    const duration = 5.6;
+    scheduleTone(root, nextMusicTime, duration, 0.026, pan);
+    scheduleTone(root * 1.5, nextMusicTime + 0.12, duration - 0.2, 0.015, -pan * 0.8);
+    scheduleTone(root * 2, nextMusicTime + 0.28, duration - 0.6, 0.01, pan * 0.4);
+    nextMusicTime += 2.8;
+    musicStep += 1;
+  }
+}
+
+async function startMusic() {
+  if (!musicEnabled) return;
+  const context = getAudioContext();
+  if (!context || !musicGain) return;
+  if (context.state === 'suspended') await context.resume();
+  musicGain.gain.cancelScheduledValues(context.currentTime);
+  musicGain.gain.setTargetAtTime(0.75, context.currentTime, 0.45);
+  scheduleMusic();
+  if (!musicTimer) musicTimer = setInterval(scheduleMusic, 900);
+}
+
+function stopMusic() {
+  if (!audioContext || !musicGain) return;
+  musicGain.gain.cancelScheduledValues(audioContext.currentTime);
+  musicGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.28);
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+  nextMusicTime = audioContext.currentTime + 0.2;
+}
+
+updateMusicToggle();
 
 async function postJson(url, payload = {}) {
   const response = await fetch(url, {
@@ -181,6 +280,7 @@ function updateBallTrail(worldX, worldY, charge, active) {
 
 async function beginGame() {
   if (phase === 'starting') return;
+  await startMusic();
   phase = 'starting';
   setScoreForm(false);
   submittedGameOverScore = null;
@@ -201,6 +301,7 @@ document.addEventListener('keydown', async (event) => {
   }
   if (event.target.closest?.('#leaderboard')) return;
   held[event.key] = true;
+  if (musicEnabled) void startMusic();
   if (event.key === ' ' || event.key === 'Enter') {
     if (phase === 'title') {
       await beginGame();
@@ -212,6 +313,19 @@ document.addEventListener('keydown', async (event) => {
   if ([' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
   }
+});
+
+document.addEventListener('pointerdown', (event) => {
+  if (event.target.closest?.('#musicToggle')) return;
+  if (musicEnabled) void startMusic();
+}, { passive: true });
+
+musicToggle?.addEventListener('click', async () => {
+  musicEnabled = !musicEnabled;
+  localStorage.setItem(MUSIC_KEY, musicEnabled ? 'on' : 'off');
+  updateMusicToggle();
+  if (musicEnabled) await startMusic();
+  else stopMusic();
 });
 
 document.addEventListener('keyup', (event) => {
@@ -317,7 +431,7 @@ function drawTitleScreen(now) {
   ctx.shadowBlur = 24 + pulse * 8;
   ctx.fillStyle = '#e9f5ff';
   ctx.font = '900 60px "Segoe UI", Arial';
-  ctx.fillText('BALL BAG', W / 2, titleY);
+  ctx.fillText('COMETIO', W / 2, titleY);
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 17px "Segoe UI", Arial';

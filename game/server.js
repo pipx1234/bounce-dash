@@ -252,4 +252,4 @@ const httpServer = http.createServer(async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => console.log(`Bounce Dash running on http://localhost:${PORT}`));
+httpServer.listen(PORT, () => console.log(`Cometio running on http://localhost:${PORT}`));
