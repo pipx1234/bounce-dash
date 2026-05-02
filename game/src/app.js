@@ -4,6 +4,7 @@ import initWasm, * as wasm from './wasm_game.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const leaderboardEl = document.getElementById('leaderboard');
 const W = 800;
 const H = 480;
 const BALL_R = 11;
@@ -15,6 +16,19 @@ const scoreStatus = document.getElementById('scoreStatus');
 const submitScoreButton = document.getElementById('submitScore');
 const scoresEl = document.getElementById('scores');
 const tabButtons = [...document.querySelectorAll('#tabs button')];
+
+function syncLeaderboardHeight() {
+  if (!leaderboardEl) return;
+  if (window.matchMedia('(max-width: 980px)').matches) {
+    leaderboardEl.style.removeProperty('height');
+    return;
+  }
+  const height = canvas.getBoundingClientRect().height;
+  if (height > 0) leaderboardEl.style.height = `${height}px`;
+}
+
+window.addEventListener('resize', syncLeaderboardHeight);
+requestAnimationFrame(syncLeaderboardHeight);
 
 function drawMessage(line1, line2 = '') {
   ctx.fillStyle = '#06060f';
