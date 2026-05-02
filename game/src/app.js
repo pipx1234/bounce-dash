@@ -73,7 +73,8 @@ function lerp(a, b, t) {
   return a + (b - a) * Math.max(0, Math.min(1, t));
 }
 
-const storedBest = parseInt(localStorage.getItem('bd_best') || '0', 10);
+let localBest = Math.max(0, parseInt(localStorage.getItem('bd_best') || '0', 10) || 0);
+let savedLocalBest = localBest;
 playerNameInput.value = localStorage.getItem('bd_name') || '';
 
 let activeRange = 'daily';
@@ -134,6 +135,16 @@ function setScoreForm(show, message = '') {
   scoreStatus.textContent = message;
 }
 
+function persistBest(best, force = false) {
+  const safeBest = Math.max(0, Math.floor(Number(best) || 0));
+  if (safeBest > localBest) localBest = safeBest;
+  if (force || localBest - savedLocalBest >= 50) {
+    savedLocalBest = localBest;
+    localStorage.setItem('bd_best', String(savedLocalBest));
+  }
+  return localBest;
+}
+
 await loadLeaderboards();
 
 const held = {};
@@ -176,7 +187,7 @@ async function beginGame() {
   pendingScore = null;
   resetBallTrail();
   await startRun();
-  wasm.game_init(Number.isFinite(storedBest) ? storedBest : 0, currentRun.seed);
+  wasm.game_init(localBest, currentRun.seed);
   phase = 'playing';
   camX = 0;
   tickAccum = 0;
@@ -194,7 +205,7 @@ document.addEventListener('keydown', async (event) => {
     if (phase === 'title') {
       await beginGame();
     } else if (phase === 'playing' && wasm.get_game_state() === 2) {
-      localStorage.setItem('bd_best', String(wasm.get_best()));
+      persistBest(wasm.get_best(), true);
       await beginGame();
     }
   }
@@ -455,8 +466,10 @@ function loop(now) {
   const state = wasm.get_game_state();
   const level = THEME;
   const score = wasm.get_score();
+  const best = persistBest(wasm.get_best());
 
   if (state === 2 && submittedGameOverScore !== score) {
+    persistBest(score, true);
     pendingScore = score;
     setScoreForm(!currentRun?.offline, currentRun?.offline ? 'Local run only.' : `Submit ${score} m`);
   }
@@ -464,7 +477,7 @@ function loop(now) {
   drawBg(level);
   drawPlatforms(level, wasm.get_visible_platforms(camX - 200, camX + W + 200));
   drawBall(wasm.get_ball_x(), wasm.get_ball_y(), wasm.get_ball_hold_ticks(), state === 0);
-  drawHUD(score, wasm.get_best());
+  drawHUD(score, best);
   if (state === 2) drawGameOver(level);
 
   requestAnimationFrame(loop);
