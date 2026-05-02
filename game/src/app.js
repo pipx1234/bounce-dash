@@ -317,7 +317,7 @@ function drawTitleScreen(now) {
   ctx.shadowBlur = 24 + pulse * 8;
   ctx.fillStyle = '#e9f5ff';
   ctx.font = '900 60px "Segoe UI", Arial';
-  ctx.fillText('BOUNCE DASH', W / 2, titleY);
+  ctx.fillText('BALL BAG', W / 2, titleY);
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 17px "Segoe UI", Arial';
@@ -325,9 +325,6 @@ function drawTitleScreen(now) {
   ctx.fillStyle = `rgba(232, 255, 247, ${0.58 + pulse * 0.42})`;
   ctx.font = 'bold 20px "Segoe UI", Arial';
   ctx.fillText('Press Space or Enter to start', W / 2, 272);
-  ctx.fillStyle = '#657184';
-  ctx.font = '13px "Segoe UI", Arial';
-  ctx.fillText('Daily / Weekly / All Time leaderboard on the right', W / 2, 306);
   ctx.restore();
 }
 
