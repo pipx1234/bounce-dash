@@ -266,7 +266,7 @@ function drawTitleScreen(now) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#7eb8f7';
   ctx.font = 'bold 17px "Segoe UI", Arial';
-  ctx.fillText('Arrow keys to steer / reach as far right as possible', W / 2, 206);
+  ctx.fillText('Arrow keys to steer / how far can you go?', W / 2, 206);
   ctx.fillStyle = `rgba(232, 255, 247, ${0.58 + pulse * 0.42})`;
   ctx.font = 'bold 20px "Segoe UI", Arial';
   ctx.fillText('Press Space or Enter to start', W / 2, 272);
