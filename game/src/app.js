@@ -89,6 +89,7 @@ let musicGain = null;
 let musicTimer = null;
 let nextMusicTime = 0;
 let musicStep = 0;
+let musicDistance = 0;
 
 function updateMusicToggle() {
   if (!musicToggle) return;
@@ -108,7 +109,22 @@ function getAudioContext() {
   return audioContext;
 }
 
-function scheduleTone(frequency, startTime, duration, volume, panAmount) {
+function semitone(frequency, steps) {
+  return frequency * (2 ** (steps / 12));
+}
+
+function scheduleTone({
+  frequency,
+  startTime,
+  duration,
+  volume,
+  panAmount = 0,
+  type = 'square',
+  attack = 0.01,
+  release = 0.08,
+  filterFrequency = 2600,
+  detune = 0,
+}) {
   const context = getAudioContext();
   if (!context || !musicGain) return;
 
@@ -117,14 +133,16 @@ function scheduleTone(frequency, startTime, duration, volume, panAmount) {
   const filter = context.createBiquadFilter();
   const panner = context.createStereoPanner ? context.createStereoPanner() : null;
 
-  oscillator.type = 'sine';
+  oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, startTime);
+  oscillator.detune.setValueAtTime(detune, startTime);
   filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(820, startTime);
-  filter.Q.setValueAtTime(0.6, startTime);
+  filter.frequency.setValueAtTime(filterFrequency, startTime);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(280, filterFrequency * 0.35), startTime + duration);
+  filter.Q.setValueAtTime(1.2, startTime);
   toneGain.gain.setValueAtTime(0, startTime);
-  toneGain.gain.linearRampToValueAtTime(volume, startTime + 1.2);
-  toneGain.gain.linearRampToValueAtTime(volume * 0.62, startTime + duration - 1.2);
+  toneGain.gain.linearRampToValueAtTime(volume, startTime + attack);
+  toneGain.gain.setValueAtTime(volume * 0.72, Math.max(startTime + attack, startTime + duration - release));
   toneGain.gain.linearRampToValueAtTime(0, startTime + duration);
 
   oscillator.connect(filter);
@@ -144,15 +162,97 @@ function scheduleMusic() {
   const context = getAudioContext();
   if (!context || !musicEnabled) return;
 
-  const roots = [164.81, 196.0, 220.0, 246.94, 196.0, 146.83];
-  while (nextMusicTime < context.currentTime + 3.5) {
-    const root = roots[musicStep % roots.length];
-    const pan = Math.sin(musicStep * 0.85) * 0.45;
-    const duration = 5.6;
-    scheduleTone(root, nextMusicTime, duration, 0.026, pan);
-    scheduleTone(root * 1.5, nextMusicTime + 0.12, duration - 0.2, 0.015, -pan * 0.8);
-    scheduleTone(root * 2, nextMusicTime + 0.28, duration - 0.6, 0.01, pan * 0.4);
-    nextMusicTime += 2.8;
+  const intensity = Math.min(1, musicDistance / 5200);
+  const beatLength = lerp(0.34, 0.17, intensity);
+  const arpPattern = [0, 2, 1, 3, 2, 4, 3, 1, 0, 3, 1, 4, 2, 3, 1, 2];
+  const chords = [
+    { root: 174.61, notes: [0, 4, 7, 11, 14] },
+    { root: 220.0, notes: [0, 3, 7, 10, 14] },
+    { root: 196.0, notes: [0, 4, 7, 9, 12] },
+    { root: 164.81, notes: [0, 3, 7, 10, 14] },
+  ];
+
+  while (nextMusicTime < context.currentTime + 1.8) {
+    const chord = chords[Math.floor(musicStep / 16) % chords.length];
+    const patternIndex = arpPattern[musicStep % arpPattern.length];
+    const octave = musicStep % 8 >= 5 ? 2 : 1;
+    const pan = Math.sin(musicStep * 0.72) * 0.38;
+    const leadFrequency = semitone(chord.root, chord.notes[patternIndex]) * octave;
+    const leadDuration = lerp(0.11, 0.08, intensity);
+
+    scheduleTone({
+      frequency: leadFrequency,
+      startTime: nextMusicTime,
+      duration: leadDuration,
+      volume: lerp(0.055, 0.074, intensity),
+      panAmount: pan,
+      type: 'square',
+      attack: 0.004,
+      release: 0.035,
+      filterFrequency: lerp(1800, 4200, intensity),
+      detune: Math.sin(musicStep * 1.7) * 4,
+    });
+
+    if (musicStep % 4 === 0) {
+      scheduleTone({
+        frequency: chord.root * 0.5,
+        startTime: nextMusicTime,
+        duration: beatLength * 1.6,
+        volume: 0.05,
+        panAmount: -0.1,
+        type: 'triangle',
+        attack: 0.008,
+        release: 0.12,
+        filterFrequency: 740,
+      });
+    }
+
+    if (musicStep % 16 === 0) {
+      for (const chordNote of chord.notes.slice(0, 4)) {
+        scheduleTone({
+          frequency: semitone(chord.root, chordNote),
+          startTime: nextMusicTime,
+          duration: 2.8,
+          volume: 0.012,
+          panAmount: Math.sin(chordNote) * 0.28,
+          type: 'sawtooth',
+          attack: 0.25,
+          release: 0.7,
+          filterFrequency: 1050,
+          detune: -7,
+        });
+      }
+    }
+
+    if (intensity > 0.32 && musicStep % 2 === 1) {
+      scheduleTone({
+        frequency: leadFrequency * 2,
+        startTime: nextMusicTime + beatLength * 0.5,
+        duration: 0.055,
+        volume: lerp(0.018, 0.035, intensity),
+        panAmount: -pan,
+        type: 'square',
+        attack: 0.002,
+        release: 0.025,
+        filterFrequency: 5200,
+      });
+    }
+
+    if (intensity > 0.68 && musicStep % 4 === 2) {
+      scheduleTone({
+        frequency: semitone(chord.root, chord.notes[(patternIndex + 2) % chord.notes.length]) * 3,
+        startTime: nextMusicTime + beatLength * 0.25,
+        duration: 0.045,
+        volume: 0.022,
+        panAmount: pan * 0.6,
+        type: 'square',
+        attack: 0.001,
+        release: 0.018,
+        filterFrequency: 6200,
+      });
+    }
+
+    nextMusicTime += beatLength;
     musicStep += 1;
   }
 }
@@ -163,9 +263,9 @@ async function startMusic() {
   if (!context || !musicGain) return;
   if (context.state === 'suspended') await context.resume();
   musicGain.gain.cancelScheduledValues(context.currentTime);
-  musicGain.gain.setTargetAtTime(0.75, context.currentTime, 0.45);
+  musicGain.gain.setTargetAtTime(0.58, context.currentTime, 0.18);
   scheduleMusic();
-  if (!musicTimer) musicTimer = setInterval(scheduleMusic, 900);
+  if (!musicTimer) musicTimer = setInterval(scheduleMusic, 280);
 }
 
 function stopMusic() {
@@ -280,6 +380,7 @@ function updateBallTrail(worldX, worldY, charge, active) {
 
 async function beginGame() {
   if (phase === 'starting') return;
+  musicDistance = 0;
   await startMusic();
   phase = 'starting';
   setScoreForm(false);
@@ -299,6 +400,7 @@ document.addEventListener('keydown', async (event) => {
     if (event.key === 'Enter') submitScoreButton.click();
     return;
   }
+  if (event.target.closest?.('#musicToggle')) return;
   if (event.target.closest?.('#leaderboard')) return;
   held[event.key] = true;
   if (musicEnabled) void startMusic();
@@ -577,6 +679,7 @@ function loop(now) {
   const state = wasm.get_game_state();
   const level = THEME;
   const score = wasm.get_score();
+  musicDistance = score;
   const best = persistBest(wasm.get_best());
 
   if (state === 2 && submittedGameOverScore !== score) {
